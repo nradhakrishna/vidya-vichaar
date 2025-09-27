@@ -26,6 +26,10 @@ connection.on('error', (err) => {
     console.error('MongoDB connection error:', err);
 });
 
+// API Routes
+const usersRouter = require('./routes/users');
+app.use('/api/users', usersRouter);
+
 app.listen(port, () => {
     console.log(`Server is running on port: ${port}`);
 });
