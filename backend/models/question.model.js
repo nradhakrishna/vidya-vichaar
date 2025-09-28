@@ -11,6 +11,9 @@ const questionSchema = new Schema({
     timestamps: true,
 });
 
+// Add compound index to prevent duplicate questions from same user in same class
+questionSchema.index({ text: 1, user: 1, classId: 1 }, { unique: true });
+
 const Question = mongoose.model('Question', questionSchema);
 
 module.exports = Question;

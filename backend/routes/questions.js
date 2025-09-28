@@ -46,8 +46,21 @@ router.post('/add', auth, async (req, res) => {
             return res.status(400).json({ msg: "You must be in a class to post questions." });
         }
 
+        // Check for duplicate question from the same user in the same class
+        const existingQuestion = await Question.findOne({
+            text: text.trim(),
+            user: req.user.id,
+            classId: user.classId
+        });
+
+        if (existingQuestion) {
+            return res.status(409).json({ 
+                msg: "You have already asked this question in this class. Please check the existing questions or ask a different question." 
+            });
+        }
+
         const newQuestion = new Question({ 
-            text, 
+            text: text.trim(), 
             author: author || user.username, 
             user: req.user.id,
             classId: user.classId
@@ -56,6 +69,12 @@ router.post('/add', auth, async (req, res) => {
         await newQuestion.save();
         res.json('Question added!');
     } catch (err) {
+        // Handle MongoDB duplicate key error
+        if (err.code === 11000) {
+            return res.status(409).json({ 
+                msg: "You have already asked this question in this class. Please check the existing questions or ask a different question." 
+            });
+        }
         res.status(400).json({ error: err.message });
     }
 });

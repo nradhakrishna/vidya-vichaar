@@ -79,10 +79,20 @@ function StudentDashboard() {
         }
     }, [fetchMyQuestions, currentClass]);
 
-    const handleQuestionSubmit = (text) => {
-        axios.post('http://localhost:5000/api/questions/add', { text }, {
-            headers: { 'x-auth-token': token }
-        }).then(() => fetchMyQuestions());
+    const handleQuestionSubmit = async (text) => {
+        try {
+            await axios.post('http://localhost:5000/api/questions/add', { text }, {
+                headers: { 'x-auth-token': token }
+            });
+            fetchMyQuestions();
+        } catch (error) {
+            if (error.response?.status === 409) {
+                alert(error.response.data.msg);
+            } else {
+                console.error('Error submitting question:', error);
+                alert('Failed to submit question. Please try again.');
+            }
+        }
     };
 
     const handleClassJoined = (joinedClass) => {
@@ -159,7 +169,10 @@ function StudentDashboard() {
                 </div>
             </div>
 
-            <QuestionForm onQuestionSubmit={handleQuestionSubmit} />
+            <QuestionForm 
+                onQuestionSubmit={handleQuestionSubmit} 
+                existingQuestions={myQuestions}
+            />
             <div className="dashboard-controls">
                 <h3>Class Questions</h3>
                 <button 
