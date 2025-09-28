@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
+import axios from 'axios';
 
-function Question({ question }) {
+function Question({ question, isTeacher = false, onQuestionUpdated }) {
+    const [isUpdating, setIsUpdating] = useState(false);
+
     const getStatusColor = (status) => {
         switch (status) {
             case 'answered':
@@ -33,6 +36,46 @@ function Question({ question }) {
         });
     };
 
+    const handleStatusChange = async (newStatus) => {
+        if (!isTeacher) return;
+        
+        setIsUpdating(true);
+        try {
+            const token = localStorage.getItem('auth-token');
+            await axios.patch(`http://localhost:5000/api/questions/update/${question._id}`, 
+                { status: newStatus },
+                { headers: { 'x-auth-token': token } }
+            );
+            
+            if (onQuestionUpdated) {
+                onQuestionUpdated();
+            }
+        } catch (err) {
+            console.error('Failed to update question status:', err);
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!isTeacher) return;
+        
+        if (window.confirm('Are you sure you want to delete this question?')) {
+            try {
+                const token = localStorage.getItem('auth-token');
+                await axios.delete(`http://localhost:5000/api/questions/${question._id}`, {
+                    headers: { 'x-auth-token': token }
+                });
+                
+                if (onQuestionUpdated) {
+                    onQuestionUpdated();
+                }
+            } catch (err) {
+                console.error('Failed to delete question:', err);
+            }
+        }
+    };
+
     return (
         <div className="question-card">
             <div className="question-header">
@@ -50,6 +93,41 @@ function Question({ question }) {
             <div className="question-text">
                 {question.text}
             </div>
+            
+            {isTeacher && (
+                <div className="question-actions">
+                    <div className="status-buttons">
+                        <button 
+                            className={`status-btn ${question.status === 'unanswered' ? 'active' : ''}`}
+                            onClick={() => handleStatusChange('unanswered')}
+                            disabled={isUpdating}
+                        >
+                            ❓ Unanswered
+                        </button>
+                        <button 
+                            className={`status-btn ${question.status === 'answered' ? 'active' : ''}`}
+                            onClick={() => handleStatusChange('answered')}
+                            disabled={isUpdating}
+                        >
+                            ✅ Answered
+                        </button>
+                        <button 
+                            className={`status-btn ${question.status === 'important' ? 'active' : ''}`}
+                            onClick={() => handleStatusChange('important')}
+                            disabled={isUpdating}
+                        >
+                            ⭐ Important
+                        </button>
+                    </div>
+                    <button 
+                        className="delete-btn"
+                        onClick={handleDelete}
+                        disabled={isUpdating}
+                    >
+                        🗑️ Delete
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
