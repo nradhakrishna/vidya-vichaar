@@ -16,7 +16,7 @@ const classSchema = new Schema({
     },
     classCode: {
         type: String,
-        required: false,
+        required: false, // Will be auto-generated, so not required initially
         unique: true,
         uppercase: true,
         validate: {
@@ -35,6 +35,10 @@ const classSchema = new Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }],
+    teachingAssistants: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
     isActive: {
         type: Boolean,
         default: true
@@ -45,6 +49,7 @@ const classSchema = new Schema({
 
 // Generate unique class code before saving
 classSchema.pre('save', async function(next) {
+    // Always generate a new class code if one doesn't exist
     if (!this.classCode) {
         this.classCode = await generateUniqueClassCode();
     }

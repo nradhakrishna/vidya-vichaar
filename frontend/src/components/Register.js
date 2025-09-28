@@ -5,7 +5,7 @@ import { useNavigate, Link } from 'react-router-dom';
 function Register() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [role, setRole] = useState('student');
+    const [role, setRole] = useState('student'); // Default role
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -17,6 +17,7 @@ function Register() {
         setSuccess('');
         setIsLoading(true);
         
+        // Basic validation
         if (!username.trim() || !password.trim() || !role) {
             setError('Please fill in all fields');
             setIsLoading(false);
@@ -44,10 +45,12 @@ function Register() {
             
             if (response.status === 201) {
                 setSuccess(`Account created successfully! Welcome ${username}! Redirecting to login...`);
+                // Clear form
                 setUsername('');
                 setPassword('');
                 setRole('student');
                 
+                // Redirect to login after 2 seconds
                 setTimeout(() => {
                     navigate('/login');
                 }, 2000);
@@ -108,6 +111,16 @@ function Register() {
                             disabled={isLoading}
                         />
                         Teacher
+                    </label>
+                    <label>
+                        <input
+                            type="radio"
+                            value="ta"
+                            checked={role === 'ta'}
+                            onChange={e => setRole(e.target.value)}
+                            disabled={isLoading}
+                        />
+                        Teaching Assistant
                     </label>
                 </div>
                 <button type="submit" disabled={isLoading}>

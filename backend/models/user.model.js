@@ -17,9 +17,11 @@ const userSchema = new Schema({
     role: {
         type: String,
         required: true,
-        enum: ['student', 'teacher'],
+        enum: ['student', 'teacher', 'ta'],
         default: 'student'
     },
+    // For teachers: classes they created
+    // For students: class they joined
     classId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Class',

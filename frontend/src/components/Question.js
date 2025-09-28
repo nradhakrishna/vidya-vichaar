@@ -1,133 +1,95 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import React from 'react';
 
-function Question({ question, isTeacher = false, onQuestionUpdated }) {
-    const [isUpdating, setIsUpdating] = useState(false);
+function Question({ question, onStatusChange, onDelete }) {
+    const { _id, text, status, createdAt, author } = question;
 
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'answered':
-                return '#38a169';
-            case 'important':
-                return '#e53e3e';
-            default:
-                return '#718096';
-        }
+    const handleStatusChange = (newStatus) => {
+        onStatusChange(_id, newStatus);
     };
 
     const getStatusIcon = (status) => {
         switch (status) {
-            case 'answered':
-                return '✅';
-            case 'important':
-                return '⭐';
-            default:
-                return '❓';
+            case 'answered': return '✅';
+            case 'important': return '⭐';
+            case 'unanswered': return '❓';
+            default: return '❓';
         }
     };
 
-    const formatDate = (dateString) => {
-        return new Date(dateString).toLocaleDateString('en-US', {
-            year: 'numeric',
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'answered': return '#4CAF50';
+            case 'important': return '#FF9800';
+            case 'unanswered': return '#2196F3';
+            default: return '#2196F3';
+        }
+    };
+
+    const formatDate = (date) => {
+        const now = new Date();
+        const questionDate = new Date(date);
+        const diffInMs = now - questionDate;
+        const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+        const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+        const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+        
+        if (diffInMinutes < 1) return 'Just now';
+        if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+        if (diffInHours < 24) return `${diffInHours}h ago`;
+        if (diffInDays === 1) return 'Yesterday';
+        if (diffInDays < 7) return `${diffInDays} days ago`;
+        
+        // For older dates, show the actual date
+        return questionDate.toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
+            year: questionDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
         });
     };
 
-    const handleStatusChange = async (newStatus) => {
-        if (!isTeacher) return;
-        
-        setIsUpdating(true);
-        try {
-            const token = localStorage.getItem('auth-token');
-            await axios.patch(`http://localhost:5000/api/questions/update/${question._id}`, 
-                { status: newStatus },
-                { headers: { 'x-auth-token': token } }
-            );
-            
-            if (onQuestionUpdated) {
-                onQuestionUpdated();
-            }
-        } catch (err) {
-            console.error('Failed to update question status:', err);
-        } finally {
-            setIsUpdating(false);
-        }
-    };
-
-    const handleDelete = async () => {
-        if (!isTeacher) return;
-        
-        if (window.confirm('Are you sure you want to delete this question?')) {
-            try {
-                const token = localStorage.getItem('auth-token');
-                await axios.delete(`http://localhost:5000/api/questions/${question._id}`, {
-                    headers: { 'x-auth-token': token }
-                });
-                
-                if (onQuestionUpdated) {
-                    onQuestionUpdated();
-                }
-            } catch (err) {
-                console.error('Failed to delete question:', err);
-            }
-        }
-    };
-
     return (
-        <div className="question-card">
+        <div className={`question-card ${status}`}>
             <div className="question-header">
-                <div className="question-meta">
-                    <span className="question-author">{question.author}</span>
-                    <span className="question-date">{formatDate(question.createdAt)}</span>
+                <div className="status-badge" style={{ backgroundColor: getStatusColor(status) }}>
+                    <span className="status-icon">{getStatusIcon(status)}</span>
+                    <span className="status-text">{status.charAt(0).toUpperCase() + status.slice(1)}</span>
                 </div>
-                <div 
-                    className="question-status"
-                    style={{ color: getStatusColor(question.status) }}
-                >
-                    {getStatusIcon(question.status)} {question.status}
-                </div>
-            </div>
-            <div className="question-text">
-                {question.text}
+                <div className="question-time">{formatDate(createdAt)}</div>
             </div>
             
-            {isTeacher && (
-                <div className="question-actions">
-                    <div className="status-buttons">
-                        <button 
-                            className={`status-btn ${question.status === 'unanswered' ? 'active' : ''}`}
-                            onClick={() => handleStatusChange('unanswered')}
-                            disabled={isUpdating}
-                        >
-                            ❓ Unanswered
-                        </button>
-                        <button 
-                            className={`status-btn ${question.status === 'answered' ? 'active' : ''}`}
-                            onClick={() => handleStatusChange('answered')}
-                            disabled={isUpdating}
-                        >
-                            ✅ Answered
-                        </button>
-                        <button 
-                            className={`status-btn ${question.status === 'important' ? 'active' : ''}`}
-                            onClick={() => handleStatusChange('important')}
-                            disabled={isUpdating}
-                        >
-                            ⭐ Important
-                        </button>
+            <div className="question-content">
+                <p className="question-text">{text}</p>
+                {author && author !== 'Anonymous' && (
+                    <div className="question-author">
+                        <span className="author-label">Asked by:</span>
+                        <span className="author-name">{author}</span>
                     </div>
-                    <button 
-                        className="delete-btn"
-                        onClick={handleDelete}
-                        disabled={isUpdating}
-                    >
-                        🗑️ Delete
-                    </button>
-                </div>
-            )}
+                )}
+            </div>
+            
+            <div className="question-actions">
+                <button 
+                    className={`action-btn ${status === 'answered' ? 'active' : ''}`}
+                    onClick={() => handleStatusChange('answered')}
+                >
+                    <span>✅</span> Answered
+                </button>
+                <button 
+                    className={`action-btn ${status === 'important' ? 'active' : ''}`}
+                    onClick={() => handleStatusChange('important')}
+                >
+                    <span>⭐</span> Important
+                </button>
+                <button 
+                    className={`action-btn ${status === 'unanswered' ? 'active' : ''}`}
+                    onClick={() => handleStatusChange('unanswered')}
+                >
+                    <span>❓</span> Unanswered
+                </button>
+                <button className="action-btn delete-btn" onClick={() => onDelete(_id)}>
+                    <span>🗑️</span> Delete
+                </button>
+            </div>
         </div>
     );
 }

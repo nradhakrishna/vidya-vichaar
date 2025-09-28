@@ -28,6 +28,7 @@ router.post('/register', async (req, res) => {
         });
         const savedUser = await newUser.save();
         
+        // Don't send password hash in response
         const userResponse = {
             id: savedUser._id,
             username: savedUser.username,

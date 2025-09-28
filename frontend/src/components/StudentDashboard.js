@@ -1,96 +1,182 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import QuestionForm from './QuestionForm';
 import JoinClass from './JoinClass';
 import QuestionBoard from './QuestionBoard';
-import QuestionForm from './QuestionForm';
 
 function StudentDashboard() {
-    const [classInfo, setClassInfo] = useState(null);
-    const [questions, setQuestions] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+    const [myQuestions, setMyQuestions] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [currentClass, setCurrentClass] = useState(null);
+    const [showJoinClass, setShowJoinClass] = useState(false);
+    const token = localStorage.getItem('auth-token');
 
-    useEffect(() => {
-        fetchClassInfo();
-        fetchQuestions();
-    }, []);
-
-    const fetchClassInfo = async () => {
+    const fetchClassInfo = useCallback(async () => {
+        if (!token) return;
         try {
-            const token = localStorage.getItem('auth-token');
-            const response = await axios.get('http://localhost:5000/api/classes/my-class', {
-                headers: { 'x-auth-token': token }
+            const res = await axios.get('http://localhost:5000/api/classes/my-class', { 
+                headers: { 'x-auth-token': token } 
             });
-            setClassInfo(response.data.class);
-        } catch (err) {
-            if (err.response?.status === 404) {
-                setClassInfo(null);
-            } else {
-                setError('Failed to fetch class information');
+            setCurrentClass(res.data.class);
+        } catch (error) {
+            console.error('Error fetching class info:', error);
+            if (error.response?.status === 404) {
+                // No class found
+                setCurrentClass(null);
             }
         }
-    };
+    }, [token]);
 
-    const fetchQuestions = async () => {
+    const fetchMyQuestions = useCallback(async () => {
+        if (!token || !currentClass) return;
+        setLoading(true);
         try {
-            const token = localStorage.getItem('auth-token');
-            const response = await axios.get('http://localhost:5000/api/questions', {
+            const res = await axios.get('http://localhost:5000/api/questions', {
                 headers: { 'x-auth-token': token }
             });
-            setQuestions(response.data);
-        } catch (err) {
-            setError('Failed to fetch questions');
+            setMyQuestions(res.data);
+        } catch (error) {
+            console.error('Error fetching questions:', error);
+            if (error.response?.status === 401) {
+                // Token is invalid, redirect to login
+                localStorage.removeItem('auth-token');
+                localStorage.removeItem('user');
+                window.location.href = '/login';
+            }
         } finally {
             setLoading(false);
         }
-    };
+    }, [token, currentClass]);
 
-    const handleClassJoined = () => {
+    useEffect(() => {
         fetchClassInfo();
-        fetchQuestions();
+    }, [fetchClassInfo]);
+
+    useEffect(() => {
+        if (currentClass) {
+            fetchMyQuestions();
+            
+            // Auto-refresh every 30 seconds, but only when page is visible
+            const interval = setInterval(() => {
+                if (!document.hidden) {
+                    fetchMyQuestions();
+                }
+            }, 30000);
+            
+            // Also refresh when page becomes visible
+            const handleVisibilityChange = () => {
+                if (!document.hidden) {
+                    fetchMyQuestions();
+                }
+            };
+            
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            
+            return () => {
+                clearInterval(interval);
+                document.removeEventListener('visibilitychange', handleVisibilityChange);
+            };
+        }
+    }, [fetchMyQuestions, currentClass]);
+
+    const handleQuestionSubmit = (text) => {
+        axios.post('http://localhost:5000/api/questions/add', { text }, {
+            headers: { 'x-auth-token': token }
+        }).then(() => fetchMyQuestions());
     };
 
-    const handleQuestionAdded = () => {
-        fetchQuestions();
+    const handleClassJoined = (joinedClass) => {
+        setCurrentClass(joinedClass);
+        setShowJoinClass(false);
+        fetchClassInfo();
     };
 
-    if (loading) {
-        return (
-            <div className="dashboard">
-                <div className="loading">Loading...</div>
-            </div>
-        );
-    }
 
-    if (!classInfo) {
+    if (!currentClass && !showJoinClass) {
         return (
-            <div className="dashboard">
-                <div className="welcome-section">
-                    <h2>Welcome to VidyaVichara!</h2>
-                    <p>Join a class to start asking questions and learning together.</p>
-                    <JoinClass onClassJoined={handleClassJoined} />
+            <div>
+                <h2>Student Dashboard</h2>
+                <div className="no-class-message">
+                    <h3>Welcome! You haven't joined a class yet.</h3>
+                    <p>Join a class using the class code provided by your teacher to start posting questions.</p>
+                    <button 
+                        className="join-class-btn" 
+                        onClick={() => setShowJoinClass(true)}
+                    >
+                        Join a Class
+                    </button>
                 </div>
             </div>
         );
     }
 
+    if (showJoinClass) {
+        return (
+            <div>
+                <h2>Student Dashboard</h2>
+                <JoinClass onClassJoined={handleClassJoined} />
+                <button 
+                    className="back-btn" 
+                    onClick={() => setShowJoinClass(false)}
+                >
+                    Back to Dashboard
+                </button>
+            </div>
+        );
+    }
+
     return (
-        <div className="dashboard">
+        <div>
+            <h2>Student Dashboard</h2>
+            
+            {/* Class Information */}
             <div className="class-info">
-                <h2>{classInfo.className}</h2>
-                <p><strong>Subject:</strong> {classInfo.subject}</p>
-                <p><strong>Class Code:</strong> <span className="class-code">{classInfo.classCode}</span></p>
-                <p><strong>Teacher:</strong> {classInfo.teacher.username}</p>
-                <p><strong>Students:</strong> {classInfo.studentCount}</p>
+                <h3>📚 {currentClass?.className} - {currentClass?.subject}</h3>
+                <div className="class-details">
+                    <p><strong>Class Code:</strong> <span className="class-code">{currentClass?.classCode}</span></p>
+                    <button 
+                        className="change-class-btn" 
+                        onClick={async () => {
+                            if (window.confirm('Are you sure you want to leave this class? You will need a new class code to join again.')) {
+                                try {
+                                    const token = localStorage.getItem('auth-token');
+                                    await axios.delete('http://localhost:5000/api/classes/leave', {
+                                        headers: { 'x-auth-token': token }
+                                    });
+                                    
+                                    setCurrentClass(null);
+                                    setShowJoinClass(false);
+                                    fetchClassInfo();
+                                } catch (err) {
+                                    console.error('Error leaving class:', err);
+                                    alert('Failed to leave class. Please try again.');
+                                }
+                            }
+                        }}
+                    >
+                        Change Class
+                    </button>
+                </div>
             </div>
 
-            <div className="questions-section">
-                <h3>Questions & Discussions</h3>
-                <QuestionForm onQuestionAdded={handleQuestionAdded} />
-                <QuestionBoard questions={questions} />
+            <QuestionForm onQuestionSubmit={handleQuestionSubmit} />
+            <div className="dashboard-controls">
+                <h3>Class Questions</h3>
+                <button 
+                    className="refresh-btn" 
+                    onClick={fetchMyQuestions}
+                    disabled={loading}
+                >
+                    {loading ? '🔄 Refreshing...' : '🔄 Refresh'}
+                </button>
             </div>
+            {loading && <div className="loading-indicator">Loading questions...</div>}
+            <QuestionBoard
+                questions={myQuestions}
+                onStatusChange={() => {}} // Students can't change status
+                onDelete={() => {}} // Students can't delete questions
+            />
         </div>
     );
 }
-
 export default StudentDashboard;

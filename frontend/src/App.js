@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
-import Register from './components/Register';
+import Register from './components/Register'; // Import the new component
 import StudentDashboard from './components/StudentDashboard';
 import TeacherDashboard from './components/TeacherDashboard';
+import TADashboard from './components/TADashboard';
 import './App.css';
 
 function App() {
@@ -18,10 +19,12 @@ function App() {
         if (storedToken && storedUser) {
             try {
                 const userData = JSON.parse(storedUser);
+                // Set token and user immediately - no validation for now
                 setToken(storedToken);
                 setUser(userData);
                 setIsLoading(false);
             } catch (error) {
+                // Invalid user data, clear storage
                 console.log('Invalid user data, clearing storage');
                 localStorage.removeItem('auth-token');
                 localStorage.removeItem('user');
@@ -71,8 +74,12 @@ function App() {
                         <Route path="/teacher" element={
                             user?.role === 'teacher' ? <TeacherDashboard /> : <Navigate to="/login" />
                         }/>
+                        <Route path="/ta" element={
+                            user?.role === 'ta' ? <TADashboard /> : <Navigate to="/login" />
+                        }/>
 
-                        <Route path="*" element={<Navigate to={user ? (user.role === 'teacher' ? '/teacher' : '/student') : '/login'} />} />
+                        {/* Redirect logic: If logged in, go to dashboard, otherwise go to login */}
+                        <Route path="*" element={<Navigate to={user ? (user.role === 'teacher' ? '/teacher' : (user.role === 'ta' ? '/ta' : '/student')) : '/login'} />} />
                     </Routes>
                 </main>
             </div>

@@ -12,7 +12,7 @@ const auth = (req, res, next) => {
             return res.status(401).json({ msg: "Token verification failed, authorization denied." });
         }
 
-        req.user = verified;
+        req.user = verified; // Add user payload (id, role) to the request
         next();
     } catch (err) {
         res.status(500).json({ error: err.message });

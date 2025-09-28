@@ -12,6 +12,7 @@ function Login({ setToken, setUser }) {
         e.preventDefault();
         setError('');
         
+        // Basic validation
         if (!username.trim() || !password.trim()) {
             setError('Please fill in all fields');
             return;
@@ -37,6 +38,8 @@ function Login({ setToken, setUser }) {
 
             if (user.role === 'teacher') {
                 navigate('/teacher');
+            } else if (user.role === 'ta') {
+                navigate('/ta');
             } else {
                 navigate('/student');
             }

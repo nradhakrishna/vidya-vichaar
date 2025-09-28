@@ -104,7 +104,8 @@ router.get('/my-class', auth, async (req, res) => {
 
         const classData = await Class.findById(user.classId._id)
             .populate('teacher', 'username')
-            .populate('students', 'username');
+            .populate('students', 'username')
+            .populate('teachingAssistants', 'username');
 
         res.json({
             class: {
@@ -114,7 +115,8 @@ router.get('/my-class', auth, async (req, res) => {
                 classCode: classData.classCode,
                 teacher: classData.teacher,
                 students: classData.students,
-                studentCount: classData.students.length
+                studentCount: classData.students.length,
+                teachingAssistants: classData.teachingAssistants
             }
         });
 
@@ -128,6 +130,7 @@ router.get('/all', auth, isTeacher, async (req, res) => {
     try {
         const classes = await Class.find({ teacher: req.user.id })
             .populate('students', 'username')
+            .populate('teachingAssistants', 'username')
             .sort({ createdAt: -1 });
 
         res.json(classes.map(cls => ({
@@ -137,6 +140,7 @@ router.get('/all', auth, isTeacher, async (req, res) => {
             classCode: cls.classCode,
             studentCount: cls.students.length,
             isActive: cls.isActive,
+            teachingAssistants: cls.teachingAssistants,
             createdAt: cls.createdAt
         })));
 
@@ -163,6 +167,14 @@ router.patch('/deactivate/:id', auth, isTeacher, async (req, res) => {
             { _id: { $in: targetClass.students } },
             { $unset: { classId: 1 } }
         );
+
+        // Remove classId from all TAs in this class
+        if (targetClass.teachingAssistants && targetClass.teachingAssistants.length > 0) {
+            await User.updateMany(
+                { _id: { $in: targetClass.teachingAssistants } },
+                { $unset: { classId: 1 } }
+            );
+        }
 
         // Remove classId from teacher
         await User.findByIdAndUpdate(req.user.id, { $unset: { classId: 1 } });
@@ -201,4 +213,91 @@ router.delete('/leave', auth, async (req, res) => {
     }
 });
 
+// POST: Assign a TA to the teacher's active class (teachers only)
+router.post('/assign-ta', auth, isTeacher, async (req, res) => {
+    try {
+        const { username } = req.body;
+        if (!username) {
+            return res.status(400).json({ msg: 'Please provide TA\'s username.' });
+        }
+
+        // Find teacher's active class
+        const targetClass = await Class.findOne({ teacher: req.user.id, isActive: true });
+        if (!targetClass) {
+            return res.status(400).json({ msg: 'You do not have an active class.' });
+        }
+
+        // Find TA user
+        const taUser = await User.findOne({ username: username.trim() });
+        if (!taUser) {
+            return res.status(404).json({ msg: 'TA user not found.' });
+        }
+        if (taUser.role !== 'ta') {
+            return res.status(400).json({ msg: 'The specified user is not a TA.' });
+        }
+
+        // Ensure TA is not already assigned to another class
+        if (taUser.classId && taUser.classId.toString() !== targetClass._id.toString()) {
+            return res.status(400).json({ msg: 'This TA is already assigned to another class.' });
+        }
+
+        // Add TA to class if not present
+        const alreadyIn = targetClass.teachingAssistants?.some(id => id.toString() === taUser._id.toString());
+        if (!alreadyIn) {
+            targetClass.teachingAssistants = targetClass.teachingAssistants || [];
+            targetClass.teachingAssistants.push(taUser._id);
+            await targetClass.save();
+        }
+
+        // Set TA's classId
+        if (!taUser.classId) {
+            await User.findByIdAndUpdate(taUser._id, { classId: targetClass._id });
+        }
+
+        const populated = await Class.findById(targetClass._id)
+            .populate('teachingAssistants', 'username');
+
+        res.json({ 
+            message: 'TA assigned successfully', 
+            teachingAssistants: populated.teachingAssistants 
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE: Remove a TA from the teacher's class (teachers only)
+router.delete('/remove-ta/:taId', auth, isTeacher, async (req, res) => {
+    try {
+        const { taId } = req.params;
+
+        const targetClass = await Class.findOne({ teacher: req.user.id, isActive: true });
+        if (!targetClass) {
+            return res.status(400).json({ msg: 'You do not have an active class.' });
+        }
+
+        // Remove TA from class
+        await Class.findByIdAndUpdate(targetClass._id, {
+            $pull: { teachingAssistants: taId }
+        });
+
+        // Unset classId on TA if they were pointing to this class
+        const taUser = await User.findById(taId);
+        if (taUser && taUser.classId && taUser.classId.toString() === targetClass._id.toString()) {
+            await User.findByIdAndUpdate(taId, { $unset: { classId: 1 } });
+        }
+
+        const populated = await Class.findById(targetClass._id)
+            .populate('teachingAssistants', 'username');
+
+        res.json({ 
+            message: 'TA removed successfully', 
+            teachingAssistants: populated?.teachingAssistants || [] 
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
+

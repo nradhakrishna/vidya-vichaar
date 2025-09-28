@@ -1,135 +1,180 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import CreateClass from './CreateClass';
 import QuestionBoard from './QuestionBoard';
 import FilterControls from './FilterControls';
+import CreateClass from './CreateClass';
+import TAManagement from './TAManagement';
 
 function TeacherDashboard() {
-    const [classInfo, setClassInfo] = useState(null);
     const [questions, setQuestions] = useState([]);
-    const [filteredQuestions, setFilteredQuestions] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-
-    useEffect(() => {
-        fetchClassInfo();
-        fetchQuestions();
-    }, []);
-
-    const fetchClassInfo = async () => {
+    const [filter, setFilter] = useState('all');
+    const [loading, setLoading] = useState(false);
+    const [currentClass, setCurrentClass] = useState(null);
+    const [showCreateClass, setShowCreateClass] = useState(false);
+    const token = localStorage.getItem('auth-token');
+    
+    const fetchClassInfo = useCallback(async () => {
+        if (!token) return;
         try {
-            const token = localStorage.getItem('auth-token');
-            const response = await axios.get('http://localhost:5000/api/classes/my-class', {
-                headers: { 'x-auth-token': token }
+            const res = await axios.get('http://localhost:5000/api/classes/my-class', { 
+                headers: { 'x-auth-token': token } 
             });
-            setClassInfo(response.data.class);
-        } catch (err) {
-            if (err.response?.status === 404) {
-                setClassInfo(null);
-            } else {
-                setError('Failed to fetch class information');
+            setCurrentClass(res.data.class);
+        } catch (error) {
+            console.error('Error fetching class info:', error);
+            if (error.response?.status === 404) {
+                // No class found
+                setCurrentClass(null);
             }
         }
-    };
+    }, [token]);
 
-    const fetchQuestions = async () => {
+    const fetchQuestions = useCallback(async () => {
+        if (!token || !currentClass) return;
+        setLoading(true);
         try {
-            const token = localStorage.getItem('auth-token');
-            const response = await axios.get('http://localhost:5000/api/questions', {
-                headers: { 'x-auth-token': token }
+            const res = await axios.get('http://localhost:5000/api/questions', { 
+                headers: { 'x-auth-token': token } 
             });
-            setQuestions(response.data);
-            setFilteredQuestions(response.data);
-        } catch (err) {
-            setError('Failed to fetch questions');
+            setQuestions(res.data);
+        } catch (error) {
+            console.error('Error fetching questions:', error);
+            if (error.response?.status === 401) {
+                // Token is invalid, redirect to login
+                localStorage.removeItem('auth-token');
+                localStorage.removeItem('user');
+                window.location.href = '/login';
+            }
         } finally {
             setLoading(false);
         }
-    };
+    }, [token, currentClass]);
 
-    const handleClassCreated = () => {
+    useEffect(() => {
         fetchClassInfo();
-        fetchQuestions();
+    }, [fetchClassInfo]);
+
+    useEffect(() => {
+        if (currentClass) {
+            fetchQuestions();
+            
+            // Auto-refresh every 30 seconds, but only when page is visible
+            const interval = setInterval(() => {
+                if (!document.hidden) {
+                    fetchQuestions();
+                }
+            }, 30000);
+            
+            // Also refresh when page becomes visible
+            const handleVisibilityChange = () => {
+                if (!document.hidden) {
+                    fetchQuestions();
+                }
+            };
+            
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            
+            return () => {
+                clearInterval(interval);
+                document.removeEventListener('visibilitychange', handleVisibilityChange);
+            };
+        }
+    }, [fetchQuestions, currentClass]);
+
+    const handleStatusChange = (id, newStatus) => {
+        axios.patch(`http://localhost:5000/api/questions/update/${id}`, { status: newStatus }, { headers: { 'x-auth-token': token } })
+            .then(() => fetchQuestions());
     };
 
-    const handleQuestionUpdated = () => {
-        fetchQuestions();
+    const handleDelete = (id) => {
+        if (window.confirm('Are you sure you want to delete this question?')) {
+            axios.delete(`http://localhost:5000/api/questions/${id}`, { headers: { 'x-auth-token': token } })
+                .then(() => fetchQuestions());
+        }
     };
 
-    const handleFilterChange = (filtered) => {
-        setFilteredQuestions(filtered);
+    const handleClassCreated = (newClass) => {
+        setCurrentClass(newClass);
+        setShowCreateClass(false);
+        fetchClassInfo();
     };
 
-    if (loading) {
+    const handleTAsUpdated = () => {
+        fetchClassInfo();
+    };
+
+    const filteredQuestions = questions.filter(q => filter === 'all' || q.status === filter);
+
+    if (!currentClass && !showCreateClass) {
         return (
-            <div className="dashboard">
-                <div className="loading">Loading...</div>
+            <div>
+                <h2>Teacher Dashboard</h2>
+                <div className="no-class-message">
+                    <h3>Welcome! You haven't created a class yet.</h3>
+                    <p>Create a class to start receiving questions from your students.</p>
+                    <button 
+                        className="create-class-btn" 
+                        onClick={() => setShowCreateClass(true)}
+                    >
+                        Create New Class
+                    </button>
+                </div>
             </div>
         );
     }
 
-    if (!classInfo) {
+    if (showCreateClass) {
         return (
-            <div className="dashboard">
-                <div className="welcome-section">
-                    <h2>Welcome to VidyaVichara!</h2>
-                    <p>Create a class to start managing questions from your students.</p>
-                    <CreateClass onClassCreated={handleClassCreated} />
-                </div>
+            <div>
+                <h2>Teacher Dashboard</h2>
+                <CreateClass onClassCreated={handleClassCreated} />
+                <button 
+                    className="back-btn" 
+                    onClick={() => setShowCreateClass(false)}
+                >
+                    Back to Dashboard
+                </button>
             </div>
         );
     }
 
     return (
-        <div className="dashboard">
+        <div>
+            <h2>Teacher Dashboard</h2>
+            
+            {/* Class Information */}
             <div className="class-info">
-                <h2>{classInfo.className}</h2>
-                <p><strong>Subject:</strong> {classInfo.subject}</p>
-                <p><strong>Class Code:</strong> <span className="class-code">{classInfo.classCode}</span></p>
-                <p><strong>Students:</strong> {classInfo.studentCount}</p>
-                <div className="class-actions">
-                    <button 
-                        className="deactivate-btn"
-                        onClick={() => handleDeactivateClass()}
-                    >
-                        Deactivate Class
-                    </button>
+                <h3>📚 {currentClass?.className} - {currentClass?.subject}</h3>
+                <div className="class-details">
+                    <p><strong>Class Code:</strong> <span className="class-code">{currentClass?.classCode}</span></p>
+                    <p><strong>Students:</strong> {currentClass?.studentCount || 0}</p>
+                    <p><strong>Teaching Assistants:</strong> {currentClass?.teachingAssistants?.length || 0}</p>
                 </div>
             </div>
 
-            <div className="questions-section">
-                <div className="questions-header">
-                    <h3>Student Questions ({questions.length})</h3>
-                    <FilterControls 
-                        questions={questions} 
-                        onFilterChange={handleFilterChange}
-                    />
-                </div>
-                <QuestionBoard 
-                    questions={filteredQuestions} 
-                    isTeacher={true}
-                    onQuestionUpdated={handleQuestionUpdated}
-                />
+            {/* TA Management */}
+            <TAManagement 
+                classInfo={currentClass} 
+                onTAsUpdated={handleTAsUpdated}
+            />
+
+            <div className="dashboard-controls">
+                <FilterControls currentFilter={filter} onFilterChange={setFilter} />
+                <button 
+                    className="refresh-btn" 
+                    onClick={fetchQuestions}
+                    disabled={loading}
+                >
+                    {loading ? '🔄 Refreshing...' : '🔄 Refresh'}
+                </button>
             </div>
+            {loading && <div className="loading-indicator">Loading questions...</div>}
+            <QuestionBoard
+                questions={filteredQuestions}
+                onStatusChange={handleStatusChange}
+                onDelete={handleDelete}
+            />
         </div>
     );
-
-    async function handleDeactivateClass() {
-        if (window.confirm('Are you sure you want to deactivate this class? This will remove all students from the class.')) {
-            try {
-                const token = localStorage.getItem('auth-token');
-                await axios.patch(`http://localhost:5000/api/classes/deactivate/${classInfo.id}`, {}, {
-                    headers: { 'x-auth-token': token }
-                });
-                
-                setClassInfo(null);
-                setQuestions([]);
-                setFilteredQuestions([]);
-            } catch (err) {
-                setError('Failed to deactivate class');
-            }
-        }
-    }
 }
-
 export default TeacherDashboard;

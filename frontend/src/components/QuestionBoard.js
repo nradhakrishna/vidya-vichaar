@@ -1,30 +1,21 @@
 import React from 'react';
 import Question from './Question';
 
-function QuestionBoard({ questions, isTeacher = false, onQuestionUpdated }) {
+function QuestionBoard({ questions, onStatusChange, onDelete }) {
     if (questions.length === 0) {
-        return (
-            <div className="question-board">
-                <div className="no-questions">
-                    <p>No questions yet. {isTeacher ? 'Students will appear here when they ask questions.' : 'Be the first to ask something!'}</p>
-                </div>
-            </div>
-        );
+        return <p>No questions to display.</p>;
     }
 
     return (
         <div className="question-board">
-            <h4>Class Questions ({questions.length})</h4>
-            <div className="questions-list">
-                {questions.map((question) => (
-                    <Question 
-                        key={question._id} 
-                        question={question} 
-                        isTeacher={isTeacher}
-                        onQuestionUpdated={onQuestionUpdated}
-                    />
-                ))}
-            </div>
+            {questions.map(q => (
+                <Question
+                    key={q._id}
+                    question={q}
+                    onStatusChange={onStatusChange}
+                    onDelete={onDelete}
+                />
+            ))}
         </div>
     );
 }
