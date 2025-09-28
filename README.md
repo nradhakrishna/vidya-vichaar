@@ -8,5 +8,5 @@ HOW TO RUN:
    mongo_uri is your mongodb uri.
    JWT_SECRET is the "master key" that ensures only your application can create and validate authentication tokens, making your user sessions secure and preventing unauthorized access.
    PORT is the server running port of backend.
-2)cd backend-> npm start
-3)cd frontend-> npm start
+2) cd backend-> npm start
+3) cd frontend-> npm start
