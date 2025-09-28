@@ -12,3 +12,5 @@ HOW TO RUN:
    PORT is the server running port of backend.
 2) from vidya-vichaar cd backend-> npm install ->npm start
 3) from vidya-vichaar cd frontend-> npm install ->npm start
+
+Github link- https://github.com/nradhakrishna/vidya-vichaar
