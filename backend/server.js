@@ -27,8 +27,12 @@ connection.on('error', (err) => {
 });
 
 // API Routes
+const questionsRouter = require('./routes/questions');
 const usersRouter = require('./routes/users');
+const classesRouter = require('./routes/classes');
+app.use('/api/questions', questionsRouter);
 app.use('/api/users', usersRouter);
+app.use('/api/classes', classesRouter);
 
 app.listen(port, () => {
     console.log(`Server is running on port: ${port}`);
